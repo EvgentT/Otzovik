@@ -1,7 +1,14 @@
 from flask import render_template, redirect, url_for
 from . import app, db
-from .forms import ReviewForm
+from .forms import ReviewForm, MovieForm
 from .models import  Review, Movie
+from pathlib import Path
+from werkzeug.utils import secure_filename
+
+
+BASEDIR = Path(__file__).parent
+UPLOAD_FOLDER = BASEDIR / 'static' / 'images'
+
 
 
 @app.route("/")
@@ -32,3 +39,35 @@ def movie(id):
                            movie=movie,
                            avg_score=0,
                            form=form)
+
+
+@app.route('/add_movie', methods=['GET', 'POST'])
+def add_movie():
+    form = MovieForm()
+    if form.validate_on_submit():
+        movie = Movie()
+        movie.title = form.title.data
+        movie.description = form.description.data
+        image = form.image.data
+        image_name = secure_filename(image.filename)
+        UPLOAD_FOLDER.mkdir(exist_ok=True)
+        image.save(UPLOAD_FOLDER / image_name)
+        movie.image = image_name
+        db.session.add(movie)
+        db.session.commit()
+        return redirect(url_for('movie', id=movie.id))
+    return render_template('add_movie.html',
+                           form=form)
+
+@app.route('/reviews')
+def reviews():
+    reviews = Review.query.order_by(Review.created_date.desc()).all()
+    return render_template('reviews.html',
+                           reviews=reviews)
+
+@app.route('/delete_review/<int:id>')
+def delete_review(id):
+    review = Review.query.get(id)
+    db.session.delete(review)
+    db.session.commit()
+    return redirect(url_for('reviews'))
